@@ -1,8 +1,32 @@
 const express = require("express");
 const { Pool } = require("pg");
 
-const connectionString = process.env["PAYWALL_DATABASE_URL"];
-const pgPool = new Pool({ connectionString: connectionString });
+const pgClient = new Pool({
+    user: '',
+    host: '',
+    database: '',
+    password: '',
+    port: ''
+});
+
+pgClient.on('error', () => console.log('Lost Postgres connection'));
+
+pgClient
+  .query(
+    `
+    create table article_reads (
+      id serial primary key,
+      visitor_id text not null,
+      article_id int not null,
+      created_at timestamp default now()
+    )
+`
+  )
+  .catch(err => console.log(err));
+
+pgClient
+  .query(`create index idx_article_reads_on_visitor_id on article_reads(visitor_id)`)
+  .catch(err => console.log(err));
 
 const app = express();
 app.set("views", "./views");
@@ -24,6 +48,7 @@ app.get("/paywall", async (req, res) => {
   let articleId = parseInt(req.query['articleId']);
   let articleIds = await getAlreadyReadArticleIds(visitorId);
   let paywallEnabled = true;
+  
   // paywall is enabled only in one scenario:
   // visitor already read 2 distinct articles in the last 7 days
   // and current article is not the one that was read in the last 7 days
@@ -45,7 +70,7 @@ let getAlreadyReadArticleIds = async (visitorId) => {
   let currentTimestamp = new Date().getTime();
   let weekAgoTimestamp = currentTimestamp - 7 * 24 * 3600 * 1000;
   let queryParams = [visitorId, new Date(weekAgoTimestamp)];
-  let res = await pgPool.query(sql, queryParams);
+  let res = await pgClient.query(sql, queryParams);
   let articleIds = res.rows.map(r => r.article_id);
   return articleIds;
 }
@@ -53,5 +78,5 @@ let getAlreadyReadArticleIds = async (visitorId) => {
 let insertArticleReadRow = async (visitorId, articleId) => {
   let sql = "insert into article_reads(visitor_id, article_id) values ($1, $2)";
   let insertParams = [visitorId, articleId];
-  await pgPool.query(sql, insertParams);
+  await pgClient.query(sql, insertParams);
 }

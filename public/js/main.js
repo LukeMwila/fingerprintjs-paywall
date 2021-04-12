@@ -15,3 +15,8 @@ var fpLoaded = function (fp) {
     });
   });
 }
+
+function initFingerprintJS() {
+  FingerprintJS.load({token: 'browser-token', region: 'eu'})
+    .then(fp => fpLoaded(fp));
+}
